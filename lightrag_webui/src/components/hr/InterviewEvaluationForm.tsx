@@ -3,8 +3,8 @@
  */
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Textarea } from '@/components/ui/Textarea';
+import Button from '@/components/ui/Button';
+import Textarea from '@/components/ui/Textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { addEvaluation } from '@/api/hr';
 import { toast } from 'sonner';

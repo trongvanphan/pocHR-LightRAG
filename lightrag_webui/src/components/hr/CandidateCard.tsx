@@ -2,9 +2,9 @@
  * CandidateCard - Summary card component for displaying candidate info
  */
 
-import { Badge } from '@/components/ui/Badge';
+import Badge from '@/components/ui/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import Button from '@/components/ui/Button';
 import { CandidateSummary } from '@/api/hr';
 import { User, Mail, Briefcase, Star, Calendar } from 'lucide-react';
 

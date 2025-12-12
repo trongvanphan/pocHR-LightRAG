@@ -2,7 +2,7 @@
  * HR API Client - Frontend API calls for HR CV Management
  */
 
-import { errorHandler, serverUrl } from './lightrag';
+import { backendBaseUrl } from '@/lib/constants';
 
 const HR_API_PREFIX = '/hr';
 
@@ -129,7 +129,7 @@ async function hrFetch<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<T> {
-    const url = `${serverUrl()}${HR_API_PREFIX}${endpoint}`;
+    const url = `${backendBaseUrl}${HR_API_PREFIX}${endpoint}`;
     const headers: HeadersInit = {
         ...options.headers,
         'Content-Type': 'application/json',
@@ -167,7 +167,7 @@ export async function uploadCV(file: File): Promise<{
     const formData = new FormData();
     formData.append('file', file);
 
-    const url = `${serverUrl()}${HR_API_PREFIX}/candidates/upload`;
+    const url = `${backendBaseUrl}${HR_API_PREFIX}/candidates/upload`;
     const headers: HeadersInit = {};
 
     const token = localStorage.getItem('LIGHTRAG-API-TOKEN');

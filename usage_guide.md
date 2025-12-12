@@ -331,6 +331,100 @@ pocHR-LightRAG/
 
 ---
 
+## 👥 HR CV Management Module
+
+Module HR cho phép quản lý CV ứng viên, phân tích và matching với job description.
+
+### Tính Năng
+
+1. **Upload và Parse CV**: Hỗ trợ PDF, DOCX (sử dụng Microsoft MarkItDown)
+2. **Extract thông tin**: LLM tự động trích xuất thông tin từ CV (Vietnamese/English)
+3. **Interview Evaluation**: Đánh giá phỏng vấn senior (trọng số 2.5x)
+4. **Skill Search**: Tìm kiếm ứng viên theo kỹ năng (hybrid: KG + vector)
+5. **Job Matching**: AI matching ứng viên với job description
+
+### Cấu Hình cho HR Module
+
+Thêm vào file `.env`:
+
+```env
+# LLM cho HR (khuyến nghị Ollama local)
+LLM_BINDING=ollama
+LLM_MODEL=qwen2.5:7b
+LLM_BINDING_HOST=http://localhost:11434
+OLLAMA_LLM_NUM_CTX=32768
+
+# Embedding (khuyến nghị local)
+EMBEDDING_BINDING=ollama
+EMBEDDING_MODEL=bge-m3:latest
+EMBEDDING_DIM=1024
+EMBEDDING_BINDING_HOST=http://localhost:11434
+
+# HR Entity Types
+ENTITY_TYPES='["Candidate", "Skill", "Company", "Education", "Certification", "JobPosition", "InterviewEvaluation", "Person", "Organization"]'
+
+# Ngôn ngữ hỗ trợ
+SUMMARY_LANGUAGE=Vietnamese,English
+```
+
+### Setup Ollama Models
+
+```bash
+# Pull embedding model
+ollama pull bge-m3:latest
+
+# Pull LLM model
+ollama pull qwen2.5:7b
+```
+
+### Sử Dụng trong WebUI
+
+1. **Truy cập tab "HR"** trong giao diện web
+2. **Upload CV**: Click "Upload CV" và chọn file PDF/DOCX
+3. **Xem chi tiết**: Click vào card ứng viên để xem thông tin đầy đủ
+4. **Thêm đánh giá**: Trong tab Evaluations, click "Add Evaluation"
+5. **Tìm kiếm**: Tab "Skill Search" để tìm ứng viên theo kỹ năng
+6. **Job Matching**: Tab "Job Matcher" để matching với job description
+
+### API Endpoints
+
+| Endpoint | Method | Mô tả |
+|----------|--------|-------|
+| `/hr/candidates/upload` | POST | Upload CV (multipart/form-data) |
+| `/hr/candidates` | GET | Danh sách ứng viên |
+| `/hr/candidates/{id}` | GET | Chi tiết ứng viên |
+| `/hr/candidates/{id}/evaluation` | POST | Thêm đánh giá phỏng vấn |
+| `/hr/skills/search?skill=Python` | GET | Tìm theo skill |
+| `/hr/jobs/match` | POST | Match job description |
+| `/hr/skills` | GET | Danh sách tất cả skills |
+
+### Ví Dụ API
+
+```bash
+# Upload CV
+curl -X POST "http://localhost:9621/hr/candidates/upload" \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@cv.pdf"
+
+# Tìm theo skill
+curl "http://localhost:9621/hr/skills/search?skill=Python&top_k=10"
+
+# Match job
+curl -X POST "http://localhost:9621/hr/jobs/match" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_description": "Senior Python Developer với 5 năm kinh nghiệm...",
+    "top_k": 15
+  }'
+```
+
+### Trọng Số Đánh Giá
+
+> **Quan trọng:** Đánh giá phỏng vấn từ senior có trọng số **2.5x** so với thông tin CV.
+> Điều này đảm bảo đánh giá thực tế override các claims từ CV.
+
+---
+
 ## 📖 Tài Liệu Tham Khảo
 
 - [README chính thức](./README.md)

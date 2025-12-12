@@ -3,9 +3,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import Input from '@/components/ui/Input';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
 import { listSkills, searchBySkill, SkillSearchResult } from '@/api/hr';
 import { toast } from 'sonner';
 import { Search, Loader2, X, Sparkles } from 'lucide-react';

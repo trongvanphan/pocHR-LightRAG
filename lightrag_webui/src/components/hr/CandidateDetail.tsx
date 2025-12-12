@@ -4,15 +4,15 @@
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { CandidateDetail as CandidateDetailType } from '@/api/hr';
 import InterviewEvaluationForm from './InterviewEvaluationForm';
 import {
     User, Mail, Phone, MapPin, Linkedin, Github,
-    Briefcase, GraduationCap, Award, FolderKanban,
+    Briefcase, GraduationCap, Award,
     Star, MessageSquarePlus
 } from 'lucide-react';
 

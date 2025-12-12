@@ -4,11 +4,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { Button } from '@/components/ui/Button';
+import Button from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import Badge from '@/components/ui/Badge';
 import { ScrollArea } from '@/components/ui/ScrollArea';
-import { Input } from '@/components/ui/Input';
+import Input from '@/components/ui/Input';
 import { toast } from 'sonner';
 import {
     listCandidates,
@@ -25,7 +25,7 @@ import SkillSearchBar from '@/components/hr/SkillSearchBar';
 import JobDescriptionInput from '@/components/hr/JobDescriptionInput';
 import {
     Users, Search, Briefcase, Upload, Loader2,
-    RefreshCw, FileUp, Trophy, AlertCircle, CheckCircle, XCircle
+    RefreshCw, FileUp, AlertCircle, CheckCircle, XCircle
 } from 'lucide-react';
 
 export default function HRManagement() {

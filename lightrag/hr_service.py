@@ -169,12 +169,14 @@ class HRService:
             if candidate_data.get("summary"):
                 doc_parts.append(f"Summary: {candidate_data['summary']}")
 
-            # Skills
+            # Skills - filter None values
             skills = candidate_data.get("skills", {})
-            if skills.get("technical"):
-                doc_parts.append(f"Technical Skills: {', '.join(skills['technical'])}")
-            if skills.get("soft"):
-                doc_parts.append(f"Soft Skills: {', '.join(skills['soft'])}")
+            tech_skills = [s for s in skills.get("technical", []) if s]
+            soft_skills = [s for s in skills.get("soft", []) if s]
+            if tech_skills:
+                doc_parts.append(f"Technical Skills: {', '.join(tech_skills)}")
+            if soft_skills:
+                doc_parts.append(f"Soft Skills: {', '.join(soft_skills)}")
 
             # Experience
             for exp in candidate_data.get("experience", []):
@@ -193,14 +195,7 @@ class HRService:
 
             # Insert into RAG
             document = "\n".join(doc_parts)
-            await self.rag.ainsert(
-                document,
-                metadata={
-                    "type": "candidate",
-                    "candidate_id": candidate_id,
-                    "name": name,
-                },
-            )
+            await self.rag.ainsert(document)
 
             logger.debug(f"Indexed candidate {candidate_id} to Knowledge Graph")
 
@@ -338,14 +333,7 @@ class HRService:
                 )
 
             document = "\n".join(doc_parts)
-            await self.rag.ainsert(
-                document,
-                metadata={
-                    "type": "interview_evaluation",
-                    "candidate_id": candidate_id,
-                    "weight": self.INTERVIEW_WEIGHT,
-                },
-            )
+            await self.rag.ainsert(document)
 
         except Exception as e:
             logger.error(f"Error indexing evaluation to KG: {e}")
@@ -397,10 +385,10 @@ class HRService:
                     + skills.get("soft", [])
                 )
 
-                # Check if skill matches
+                # Check if skill matches (handle None values)
                 skill_lower = skill.lower()
                 skill_matched = any(
-                    skill_lower in s.lower() for s in all_skills
+                    s and skill_lower in s.lower() for s in all_skills
                 )
 
                 if skill_matched:

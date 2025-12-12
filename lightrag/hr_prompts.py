@@ -204,4 +204,3 @@ Identify related skills and synonyms to expand the search:
 
 Return a JSON array of search terms:
 ["skill1", "skill2", "related_skill", ...]'''
-'''
