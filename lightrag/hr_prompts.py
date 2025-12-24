@@ -7,10 +7,16 @@ These prompts are designed to work with both Vietnamese and English CVs.
 CV_EXTRACTION_PROMPT = '''You are an HR assistant specialized in extracting structured information from resumes/CVs.
 Extract the following information from the CV content provided. Support both Vietnamese and English.
 
+IMPORTANT NORMALIZATION RULES:
+1. ALL SKILLS must be in LOWERCASE (e.g., "python", ".net core", "react", "typescript")
+   This ensures proper linking in Knowledge Graph.
+2. Keep proper names (candidate names, company names, institutions) with normal capitalization.
+3. Normalize common variations: ".NET Core" → "dotnet core", "C#" → "csharp", "Node.JS" → "nodejs"
+
 Output MUST be valid JSON with this exact structure:
 {{
     "personal_info": {{
-        "name": "Full name",
+        "name": "Full name (capitalize properly)",
         "email": "Email address or null",
         "phone": "Phone number or null",
         "location": "City/Country or null",
@@ -19,13 +25,13 @@ Output MUST be valid JSON with this exact structure:
     }},
     "summary": "Brief professional summary if available",
     "skills": {{
-        "technical": ["List of technical skills"],
-        "soft": ["List of soft skills"],
+        "technical": ["lowercase skill1", "lowercase skill2"],
+        "soft": ["lowercase soft skill1", "lowercase soft skill2"],
         "languages": ["List of spoken languages with proficiency"]
     }},
     "experience": [
         {{
-            "company": "Company name",
+            "company": "Company Name (capitalize properly)",
             "role": "Job title",
             "duration": "Start - End dates",
             "responsibilities": ["Key responsibilities"],
@@ -34,7 +40,7 @@ Output MUST be valid JSON with this exact structure:
     ],
     "education": [
         {{
-            "institution": "School/University name",
+            "institution": "School/University Name (capitalize properly)",
             "degree": "Degree type",
             "field": "Field of study",
             "graduation_year": "Year or expected year"
@@ -52,7 +58,7 @@ Output MUST be valid JSON with this exact structure:
         {{
             "name": "Project name",
             "description": "Brief description",
-            "technologies": ["Technologies used"]
+            "technologies": ["lowercase tech1", "lowercase tech2"]
         }}
     ]
 }}

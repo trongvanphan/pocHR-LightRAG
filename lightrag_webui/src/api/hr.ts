@@ -268,3 +268,63 @@ export async function listSkills(): Promise<{
 }> {
     return hrFetch('/skills');
 }
+
+/**
+ * Update candidate information
+ */
+export async function updateCandidate(
+    candidateId: string,
+    updateData: {
+        personal_info?: Record<string, string>;
+        summary?: string;
+        skills?: { technical?: string[]; soft?: string[] };
+        experience?: Array<Record<string, unknown>>;
+        education?: Array<Record<string, unknown>>;
+        certifications?: Array<Record<string, unknown>>;
+        projects?: Array<Record<string, unknown>>;
+        _merge_lists?: boolean;
+    }
+): Promise<{
+    status: string;
+    candidate_id: string;
+    message: string;
+    updated_at: string;
+}> {
+    return hrFetch(`/candidates/${candidateId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+    });
+}
+
+/**
+ * Delete a candidate
+ */
+export async function deleteCandidate(
+    candidateId: string
+): Promise<{
+    status: string;
+    candidate_id: string;
+    message: string;
+}> {
+    return hrFetch(`/candidates/${candidateId}`, {
+        method: 'DELETE',
+    });
+}
+
+/**
+ * Add skills to a candidate (preserves existing skills)
+ */
+export async function addSkillsToCandidate(
+    candidateId: string,
+    skills: { technical?: string[]; soft?: string[] }
+): Promise<{
+    status: string;
+    candidate_id: string;
+    message: string;
+    current_skills: { technical: string[]; soft: string[] };
+}> {
+    return hrFetch(`/candidates/${candidateId}/skills`, {
+        method: 'POST',
+        body: JSON.stringify(skills),
+    });
+}

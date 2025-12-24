@@ -122,6 +122,9 @@ class HRService:
             # Parse JSON response
             candidate_data = self._parse_json_response(response)
 
+            # Normalize skills to lowercase for consistent KG linking
+            candidate_data = self._normalize_skills(candidate_data)
+
             # Generate candidate ID
             candidate_id = str(uuid.uuid4())[:8]
             name = candidate_data.get("personal_info", {}).get("name", "Unknown")
@@ -147,6 +150,72 @@ class HRService:
         except Exception as e:
             logger.error(f"Error extracting candidate info: {e}")
             raise
+
+    def _normalize_skills(self, candidate_data: dict) -> dict:
+        """
+        Normalize skills to lowercase for consistent Knowledge Graph linking.
+        
+        Common variations like ".NET Core", ".net core", "DotNet Core" will all
+        become "dotnet core" so they link to the same entity in KG.
+        
+        Args:
+            candidate_data: Raw candidate data from LLM extraction
+            
+        Returns:
+            Candidate data with normalized skills
+        """
+        # Mapping of common variations to normalized form
+        skill_mappings = {
+            ".net": "dotnet",
+            ".net core": "dotnet core",
+            ".net framework": "dotnet framework",
+            "c#": "csharp",
+            "c++": "cpp",
+            "node.js": "nodejs",
+            "react.js": "reactjs",
+            "vue.js": "vuejs",
+            "next.js": "nextjs",
+            "express.js": "expressjs",
+            "angular.js": "angularjs",
+            "f#": "fsharp",
+        }
+        
+        def normalize_skill(skill: str) -> str:
+            if not skill:
+                return skill
+            # Convert to lowercase
+            normalized = skill.lower().strip()
+            # Apply specific mappings
+            for old, new in skill_mappings.items():
+                if normalized == old or normalized.startswith(old + " "):
+                    normalized = normalized.replace(old, new)
+            return normalized
+        
+        # Normalize technical skills
+        skills = candidate_data.get("skills", {})
+        if skills.get("technical"):
+            skills["technical"] = [
+                normalize_skill(s) for s in skills["technical"] if s
+            ]
+        
+        # Normalize soft skills
+        if skills.get("soft"):
+            skills["soft"] = [
+                normalize_skill(s) for s in skills["soft"] if s
+            ]
+        
+        # Normalize project technologies
+        projects = candidate_data.get("projects", [])
+        for project in projects:
+            if project.get("technologies"):
+                project["technologies"] = [
+                    normalize_skill(t) for t in project["technologies"] if t
+                ]
+        
+        candidate_data["skills"] = skills
+        candidate_data["projects"] = projects
+        
+        return candidate_data
 
     async def _index_candidate_to_kg(self, candidate_data: dict):
         """Index candidate data into Knowledge Graph with proper entities and relationships."""
@@ -354,10 +423,10 @@ class HRService:
         try:
             from lightrag import QueryParam
 
-            # Use hybrid/mix mode for best results
+            # Use hybrid mode for best results (KG entities + relationships)
             result = await self.rag.aquery(
                 f"Find candidates with {skill} skill. List their names, experience level, and related skills.",
-                param=QueryParam(mode="mix", top_k=top_k),
+                param=QueryParam(mode="hybrid", top_k=top_k),
             )
 
             # Parse and enhance results with local candidate data
@@ -430,7 +499,7 @@ class HRService:
 
     async def match_job(self, job_description: str, top_k: int = 10) -> dict:
         """
-        Match candidates to a job description.
+        Match candidates to a job description using Hybrid RAG retrieval.
 
         Args:
             job_description: Job description text
@@ -440,18 +509,57 @@ class HRService:
             Job match results with ranked candidates
         """
         try:
-            # First, analyze the job
+            from lightrag import QueryParam
+
+            # Step 1: Analyze the job requirements
             job_prompt = JOB_ANALYSIS_PROMPT.format(job_content=job_description)
             job_response = await self.rag.llm_model_func(
                 job_prompt,
                 system_prompt="You are an expert HR assistant analyzing job requirements. Always return valid JSON.",
             )
             job_requirements = self._parse_json_response(job_response)
+            
+            # Step 2: Build search query from job requirements
+            required_skills = job_requirements.get("required_skills", {})
+            must_have = required_skills.get("must_have", [])
+            nice_to_have = required_skills.get("nice_to_have", [])
+            job_title = job_requirements.get("job_title", "")
+            
+            # Create search query combining skills
+            all_skills = must_have + nice_to_have
+            search_query = f"""
+            Find candidates for {job_title} position.
+            Required skills: {', '.join(must_have) if must_have else 'Not specified'}.
+            Nice to have: {', '.join(nice_to_have) if nice_to_have else 'Not specified'}.
+            List candidate names, their relevant skills, experience level, and qualifications.
+            """
+            
+            # Step 3: Use Hybrid mode to search Knowledge Graph
+            logger.info(f"Searching candidates with Hybrid mode for: {job_title}")
+            rag_result = await self.rag.aquery(
+                search_query,
+                param=QueryParam(
+                    mode="hybrid",  # Use Hybrid mode for best results
+                    top_k=top_k * 2,  # Get more to filter
+                )
+            )
+            
+            logger.debug(f"RAG Hybrid search result: {rag_result[:500]}...")
 
-            # Get all candidates
+            # Step 4: Get all candidates from local storage
             all_candidates = await self.get_all_candidates()
+            
+            if not all_candidates:
+                return {
+                    "job_title": job_title,
+                    "job_level": job_requirements.get("level"),
+                    "required_skills": required_skills,
+                    "matched_candidates": [],
+                    "total_candidates": 0,
+                    "search_context": rag_result[:1000] if rag_result else "No context found",
+                }
 
-            # Match each candidate
+            # Step 5: Match each candidate using LLM with RAG context
             matched_candidates = []
             for candidate in all_candidates:
                 # Get evaluation data if exists
@@ -459,13 +567,42 @@ class HRService:
                     candidate.get("_id")
                 )
 
-                match_prompt = CANDIDATE_MATCHING_PROMPT.format(
-                    candidate_profile=json.dumps(candidate, ensure_ascii=False),
-                    job_requirements=json.dumps(job_requirements, ensure_ascii=False),
-                    interview_data=json.dumps(evaluations, ensure_ascii=False)
-                    if evaluations
-                    else "No interview data available",
-                )
+                # Enhanced matching prompt with RAG context
+                match_prompt = f"""
+Based on the Knowledge Graph search results and candidate profile, evaluate the match.
+
+## Knowledge Graph Context (from Hybrid search):
+{rag_result[:2000] if rag_result else "No additional context available"}
+
+## Job Requirements:
+{json.dumps(job_requirements, ensure_ascii=False, indent=2)}
+
+## Candidate Profile:
+{json.dumps(candidate, ensure_ascii=False, indent=2)}
+
+## Interview Evaluations (Weight: 2.5x):
+{json.dumps(evaluations, ensure_ascii=False, indent=2) if evaluations else "No interview data available"}
+
+Evaluate how well this candidate matches the job. Consider:
+1. Skills match (must-have vs nice-to-have)
+2. Experience relevance
+3. Interview evaluations (weighted 2.5x higher than CV claims)
+4. Overall fit
+
+Return JSON with:
+{{
+    "match_score": <0-100>,
+    "overall_recommendation": "Strong Hire" | "Hire" | "Maybe" | "No Hire",
+    "hiring_confidence": "High" | "Medium" | "Low",
+    "strengths": ["strength1", "strength2"],
+    "risks": ["risk1", "risk2"],
+    "skill_match_details": {{
+        "matched_must_have": ["skill1"],
+        "missing_must_have": ["skill2"],
+        "matched_nice_to_have": ["skill3"]
+    }}
+}}
+"""
 
                 match_response = await self.rag.llm_model_func(
                     match_prompt,
@@ -473,17 +610,26 @@ class HRService:
                 )
                 match_result = self._parse_json_response(match_response)
 
+                # Apply 2.5x weight boost if has positive evaluation
+                base_score = match_result.get("match_score", 0)
+                if evaluations:
+                    for eval_data in evaluations:
+                        if eval_data.get("overall_recommendation") in ["Strong Hire", "Hire"]:
+                            base_score = min(100, base_score * 1.25)  # 25% boost for good reviews
+                            break
+
                 matched_candidates.append(
                     {
                         "candidate_id": candidate.get("_id"),
                         "name": candidate.get("personal_info", {}).get(
                             "name", "Unknown"
                         ),
-                        "match_score": match_result.get("match_score", 0),
+                        "match_score": round(base_score, 1),
                         "recommendation": match_result.get("overall_recommendation"),
                         "hiring_confidence": match_result.get("hiring_confidence"),
                         "strengths": match_result.get("strengths", []),
                         "risks": match_result.get("risks", []),
+                        "skill_match": match_result.get("skill_match_details", {}),
                         "has_evaluation": bool(evaluations),
                     }
                 )
@@ -492,11 +638,12 @@ class HRService:
             matched_candidates.sort(key=lambda x: x["match_score"], reverse=True)
 
             return {
-                "job_title": job_requirements.get("job_title"),
+                "job_title": job_title,
                 "job_level": job_requirements.get("level"),
-                "required_skills": job_requirements.get("required_skills", {}),
+                "required_skills": required_skills,
                 "matched_candidates": matched_candidates[:top_k],
                 "total_candidates": len(all_candidates),
+                "retrieval_mode": "hybrid",
             }
 
         except Exception as e:
@@ -540,6 +687,153 @@ class HRService:
             candidate_id
         )
 
+        return candidate_data
+
+    async def update_candidate(
+        self, candidate_id: str, update_data: dict
+    ) -> Optional[dict]:
+        """
+        Update candidate information (skills, experience, etc.).
+        
+        Args:
+            candidate_id: ID of the candidate to update
+            update_data: Dictionary with fields to update
+            
+        Returns:
+            Updated candidate data or None if not found
+        """
+        candidate_file = self.candidates_dir / f"{candidate_id}.json"
+        if not candidate_file.exists():
+            return None
+
+        try:
+            candidate_data = json.loads(candidate_file.read_text(encoding="utf-8"))
+            
+            # Update allowed fields
+            allowed_fields = [
+                "personal_info", "summary", "skills", 
+                "experience", "education", "certifications", "projects"
+            ]
+            
+            for field in allowed_fields:
+                if field in update_data:
+                    if isinstance(update_data[field], dict) and isinstance(candidate_data.get(field), dict):
+                        # Merge dictionaries
+                        candidate_data[field].update(update_data[field])
+                    elif isinstance(update_data[field], list) and isinstance(candidate_data.get(field), list):
+                        # For lists, replace entirely or merge based on intent
+                        if update_data.get("_merge_lists", False):
+                            # Merge lists (add new items)
+                            existing = set(str(item) for item in candidate_data[field])
+                            for item in update_data[field]:
+                                if str(item) not in existing:
+                                    candidate_data[field].append(item)
+                        else:
+                            # Replace list
+                            candidate_data[field] = update_data[field]
+                    else:
+                        candidate_data[field] = update_data[field]
+            
+            # Update metadata
+            candidate_data["_updated_at"] = datetime.now().isoformat()
+            
+            # Save updated data
+            candidate_file.write_text(
+                json.dumps(candidate_data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            
+            # Re-index to Knowledge Graph
+            await self._index_candidate_to_kg(candidate_data)
+            
+            logger.info(f"Updated candidate {candidate_id}")
+            return candidate_data
+            
+        except Exception as e:
+            logger.error(f"Error updating candidate {candidate_id}: {e}")
+            raise
+
+    async def delete_candidate(self, candidate_id: str) -> bool:
+        """
+        Delete a candidate and all associated data.
+        
+        Args:
+            candidate_id: ID of the candidate to delete
+            
+        Returns:
+            True if deleted successfully, False if not found
+        """
+        candidate_file = self.candidates_dir / f"{candidate_id}.json"
+        if not candidate_file.exists():
+            return False
+
+        try:
+            # Delete candidate file
+            candidate_file.unlink()
+            
+            # Delete associated evaluations
+            for eval_file in self.evaluations_dir.glob(f"{candidate_id}_*.json"):
+                eval_file.unlink()
+                logger.debug(f"Deleted evaluation file: {eval_file}")
+            
+            # Note: We cannot easily remove from KG without tracking doc IDs
+            # The KG data will become stale but won't affect accuracy significantly
+            
+            logger.info(f"Deleted candidate {candidate_id} and associated evaluations")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting candidate {candidate_id}: {e}")
+            raise
+
+    async def add_skills_to_candidate(
+        self, candidate_id: str, new_skills: dict
+    ) -> Optional[dict]:
+        """
+        Convenience method to add new skills to a candidate.
+        
+        Args:
+            candidate_id: ID of the candidate
+            new_skills: Dict with 'technical' and/or 'soft' skill lists
+            
+        Returns:
+            Updated candidate data
+        """
+        candidate_file = self.candidates_dir / f"{candidate_id}.json"
+        if not candidate_file.exists():
+            return None
+            
+        candidate_data = json.loads(candidate_file.read_text(encoding="utf-8"))
+        
+        # Get existing skills
+        existing_skills = candidate_data.get("skills", {"technical": [], "soft": []})
+        
+        # Add new technical skills
+        if new_skills.get("technical"):
+            existing_tech = set(s for s in existing_skills.get("technical", []) if s)
+            for skill in new_skills["technical"]:
+                if skill and skill not in existing_tech:
+                    existing_skills.setdefault("technical", []).append(skill)
+        
+        # Add new soft skills
+        if new_skills.get("soft"):
+            existing_soft = set(s for s in existing_skills.get("soft", []) if s)
+            for skill in new_skills["soft"]:
+                if skill and skill not in existing_soft:
+                    existing_skills.setdefault("soft", []).append(skill)
+        
+        candidate_data["skills"] = existing_skills
+        candidate_data["_updated_at"] = datetime.now().isoformat()
+        
+        candidate_file.write_text(
+            json.dumps(candidate_data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        
+        # Re-index
+        await self._index_candidate_to_kg(candidate_data)
+        
+        logger.info(f"Added skills to candidate {candidate_id}")
         return candidate_data
 
     async def get_all_skills(self) -> list[str]:

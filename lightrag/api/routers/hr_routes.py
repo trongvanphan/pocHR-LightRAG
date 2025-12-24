@@ -342,4 +342,116 @@ def create_hr_routes(rag, api_key: Optional[str] = None):
             "skills": skills,
         }
 
+    @router.put(
+        "/candidates/{candidate_id}",
+        summary="Update candidate",
+        description="Update candidate information (skills, experience, etc.).",
+    )
+    async def update_candidate(
+        candidate_id: str,
+        update_data: dict,
+        _=Depends(auth),
+    ):
+        """
+        Update candidate information.
+        
+        Allowed fields: personal_info, summary, skills, experience, education, certifications, projects
+        
+        Set _merge_lists: true in the request to merge list fields instead of replacing.
+        """
+        hr_service = get_hr_service(rag)
+        
+        try:
+            candidate = await hr_service.update_candidate(candidate_id, update_data)
+            
+            if not candidate:
+                raise HTTPException(status_code=404, detail="Candidate not found")
+            
+            return {
+                "status": "success",
+                "candidate_id": candidate_id,
+                "message": "Candidate updated successfully",
+                "updated_at": candidate.get("_updated_at"),
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error updating candidate: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.delete(
+        "/candidates/{candidate_id}",
+        summary="Delete candidate",
+        description="Delete a candidate and all associated evaluations.",
+    )
+    async def delete_candidate(candidate_id: str, _=Depends(auth)):
+        """
+        Delete a candidate and all associated data.
+        
+        Warning: This action cannot be undone.
+        """
+        hr_service = get_hr_service(rag)
+        
+        try:
+            deleted = await hr_service.delete_candidate(candidate_id)
+            
+            if not deleted:
+                raise HTTPException(status_code=404, detail="Candidate not found")
+            
+            return {
+                "status": "success",
+                "candidate_id": candidate_id,
+                "message": "Candidate deleted successfully",
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting candidate: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post(
+        "/candidates/{candidate_id}/skills",
+        summary="Add skills to candidate",
+        description="Add new skills to a candidate without replacing existing ones.",
+    )
+    async def add_skills(
+        candidate_id: str,
+        skills: dict,
+        _=Depends(auth),
+    ):
+        """
+        Add new skills to a candidate.
+        
+        Request body example:
+        {
+            "technical": ["Kubernetes", "Terraform"],
+            "soft": ["Leadership"]
+        }
+        
+        Existing skills are preserved, only new ones are added.
+        """
+        hr_service = get_hr_service(rag)
+        
+        try:
+            candidate = await hr_service.add_skills_to_candidate(candidate_id, skills)
+            
+            if not candidate:
+                raise HTTPException(status_code=404, detail="Candidate not found")
+            
+            all_skills = candidate.get("skills", {})
+            return {
+                "status": "success",
+                "candidate_id": candidate_id,
+                "message": "Skills added successfully",
+                "current_skills": {
+                    "technical": all_skills.get("technical", []),
+                    "soft": all_skills.get("soft", []),
+                },
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error adding skills: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
     return router

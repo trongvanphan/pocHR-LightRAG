@@ -145,15 +145,64 @@ Sau khi server chạy, mở trình duyệt và truy cập: `http://localhost:962
 2. **Xem trạng thái xử lý**: Theo dõi tiến độ indexing
 3. **Quản lý tài liệu**: Xóa, cập nhật
 
-### 🔍 Tab Query (Truy Vấn)
-1. **Nhập câu hỏi** vào ô tìm kiếm
-2. **Chọn chế độ truy vấn**:
-   - `local`: Tìm kiếm dựa trên context cục bộ
-   - `global`: Sử dụng kiến thức toàn cục
-   - `hybrid`: Kết hợp cả hai
-   - `mix`: Kết hợp Knowledge Graph và Vector Search
-   - `naive`: Tìm kiếm vector đơn giản
-3. **Nhận kết quả** với nguồn trích dẫn
+### 🔍 Tab Retrieval (Truy Vấn)
+
+#### Query Mode (Chế độ truy vấn)
+
+| Mode | Mô tả | Khi nào dùng |
+|------|-------|--------------|
+| **Naive** | Tìm kiếm vector truyền thống trên text chunks | Câu hỏi đơn giản, tìm kiếm từ khóa |
+| **Local** | Tập trung vào **entity** (thực thể) trong Knowledge Graph | Hỏi về một đối tượng cụ thể |
+| **Global** | Tập trung vào **relationships** (quan hệ) trong KG | Hỏi về mối liên hệ giữa các đối tượng |
+| **Hybrid** | Local + Global | Câu hỏi phức tạp cần cả entity và relationship |
+| **Mix** | Local + Global + Naive | **Khuyến nghị** - Kết hợp tất cả các phương pháp |
+| **Bypass** | Bỏ qua retrieval, gửi thẳng câu hỏi tới LLM | Chat thường, không cần context từ tài liệu |
+
+#### Response Format (Định dạng phản hồi)
+
+| Format | Mô tả |
+|--------|-------|
+| **Multiple Paragraphs** | Câu trả lời dài, nhiều đoạn văn |
+| **Single Paragraph** | Câu trả lời ngắn gọn, 1 đoạn |
+| **Bullet Points** | Danh sách gạch đầu dòng |
+
+#### Token Parameters (Giới hạn token)
+
+| Parameter | Default | Mô tả |
+|-----------|---------|-------|
+| **KG Top K** | 40 | Số lượng entities/relations lấy từ Knowledge Graph. Áp dụng cho tất cả mode trừ Naive |
+| **Chunk Top K** | 20 | Số lượng text chunks lấy từ vector search. Áp dụng cho **tất cả** modes |
+| **Max Entity Tokens** | 6000 | Giới hạn tokens cho context về entities |
+| **Max Relation Tokens** | 8000 | Giới hạn tokens cho context về relationships |
+| **Max Total Tokens** | 30000 | Tổng budget tokens cho toàn bộ query context |
+
+#### Advanced Options (Tùy chọn nâng cao)
+
+| Option | Default | Mô tả |
+|--------|---------|-------|
+| **History Turns** | 0 | Số lượng cặp hội thoại (user-assistant) để giữ context. 0 = không giữ lịch sử |
+| **Only Need Context** | Off | Bật = chỉ trả về context retrieved, không generate response |
+| **Only Need Prompt** | Off | Bật = chỉ trả về prompt, không generate response |
+| **Stream Response** | On | Bật = streaming real-time response |
+| **Enable Rerank** | On | Bật = sắp xếp lại kết quả (cần cấu hình reranker model) |
+| **Additional Output Prompt** | Empty | Prompt bổ sung cho LLM về cách format output |
+
+#### Khuyến Nghị Cấu Hình
+
+**Cho câu hỏi đơn giản:**
+- Mode: `Naive` hoặc `Local`
+- KG Top K: 20
+- Chunk Top K: 10
+
+**Cho câu hỏi phức tạp:**
+- Mode: `Mix` (recommended)
+- KG Top K: 40-60
+- Chunk Top K: 20-30
+
+**Cho summarization:**
+- Mode: `Global`
+- Response Format: Multiple Paragraphs
+- Max Total Tokens: 50000+
 
 ### 🕸️ Tab Graph (Đồ Thị)
 - Xem trực quan Knowledge Graph
@@ -393,7 +442,10 @@ ollama pull qwen2.5:7b
 | `/hr/candidates/upload` | POST | Upload CV (multipart/form-data) |
 | `/hr/candidates` | GET | Danh sách ứng viên |
 | `/hr/candidates/{id}` | GET | Chi tiết ứng viên |
+| `/hr/candidates/{id}` | PUT | Cập nhật thông tin ứng viên |
+| `/hr/candidates/{id}` | DELETE | Xóa ứng viên |
 | `/hr/candidates/{id}/evaluation` | POST | Thêm đánh giá phỏng vấn |
+| `/hr/candidates/{id}/skills` | POST | Thêm skills mới cho ứng viên |
 | `/hr/skills/search?skill=Python` | GET | Tìm theo skill |
 | `/hr/jobs/match` | POST | Match job description |
 | `/hr/skills` | GET | Danh sách tất cả skills |
